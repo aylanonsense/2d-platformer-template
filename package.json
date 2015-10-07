@@ -1,0 +1,24 @@
+{
+  "name": "2d-platformer-template",
+  "version": "0.0.0",
+  "description": "A template project for 2d platformer games.",
+  "main": "index.js",
+  "dependencies": {
+    "express": "^4.13.3",
+    "requirejs": "^2.1.20"
+  },
+  "devDependencies": {},
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/bridgs/2d-platformer-template.git"
+  },
+  "author": "bridgs",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/bridgs/2d-platformer-template/issues"
+  },
+  "homepage": "https://github.com/bridgs/2d-platformer-template"
+}
