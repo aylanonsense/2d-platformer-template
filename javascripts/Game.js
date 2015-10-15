@@ -1,36 +1,50 @@
 define([
 	'Global',
 	'display/Draw',
+	'util/now',
 	'entity/Entity'
 ], function(
 	Global,
 	Draw,
+	now,
 	Entity
 ) {
 	function Game() {
 		this.entities = [
-			new Entity({ x: 400, y: 500, width: 700, height: 50, stability: 3 }),
-			new Entity({ x: 700, y: 400, width: 100, height: 100, gravityY: 100, stability: 2, velX: -100 }),
-			new Entity({ x: 287, y: 150, width: 25, height: 25, gravityY: 100, stability: 1 }),
-			new Entity({ x: 310, y: 200, width: 25, height: 25, gravityY: 100, stability: 1 }),
-			new Entity({ x: 330, y: 250, width: 25, height: 25, gravityY: 100, stability: 1 }),
-			new Entity({ x: 320, y: 300, width: 25, height: 25, gravityY: 100, stability: 1 }),
-			new Entity({ x: 342, y: 350, width: 25, height: 25, gravityY: 100, stability: 1 }),
-			new Entity({ x: 342, y: 350, width: 25, height: 25, gravityY: 100, stability: 1 }),
-			new Entity({ x: 200, y: 50, width: 25, height: 25, gravityY: 100, stability: 1, velX: 200 }),
-			new Entity({ x: 600, y: 50, width: 25, height: 25, gravityY: 100, stability: 1, velX: -200 }),
+			new Entity({ x: 490, y: 565, width: 600, height: 50, stability: 4, velY: -10 }),
+			new Entity({ x: 90, y: 700, width: 150, height: 40, stability: 3, velY: -50 }),
+			new Entity({ x: 780, y: 410, width: 25, height: 250, stability: 2, velX: -50, velY: -10 })
 		];
+		for(var i = 0; i < 70; i++) {
+			this.entities.push(new Entity({
+				x: 150 + 500 * Math.random(),
+				y: 50 + 350 * Math.random(),
+				width: 10 + 100 * Math.random() * Math.random(),
+				height: 10 + 100 * Math.random() * Math.random(),
+				gravityY: 150,
+				stability: 1
+			}));
+		}
+		this.fps = Global.FRAMES_PER_SECOND || 60;
+		this._framesInLastSecond = 0;
+		this._startTimeOfLastFPSPoll = now();
 	}
 	Game.prototype.update = function(t) {
 		for(var i = 0; i < this.entities.length; i++) {
-			this.entities[i].startOfFrame(t);
+			this.entities[i].startOfMovement(t);
 		}
 
 		//move entities in steps
 		var timeLeft = t;
-		var numStepsLeft = Math.max.apply(Math, this.entities.map(function(entity) {
-			return entity.getNumMoveSteps(timeLeft);
-		}));
+		var numStepsLeft;
+		if(Global.FORCE_NUM_MOVE_STEPS !== null) {
+			numStepsLeft = Global.FORCE_NUM_MOVE_STEPS;
+		}
+		else {
+			numStepsLeft = Math.max.apply(Math, this.entities.map(function(entity) {
+				return entity.getNumMoveSteps(timeLeft);
+			}));
+		}
 		var numStepsTaken = 0;
 		while(numStepsLeft > 0 && timeLeft > 0 && numStepsTaken < 100) {
 			var timeThisStep = timeLeft / numStepsLeft;
@@ -50,9 +64,11 @@ define([
 			this._checkForEntityCollisions();
 
 			//figure out how many steps are left
-			numStepsLeft = Math.max.apply(Math, this.entities.map(function(entity) {
-				return entity.getNumMoveSteps(timeLeft);
-			}));
+			if(Global.FORCE_NUM_MOVE_STEPS !== null) {
+				numStepsLeft = Math.max.apply(Math, this.entities.map(function(entity) {
+					return entity.getNumMoveSteps(timeLeft);
+				}));
+			}
 			numStepsTaken++;
 		}
 		if(numStepsTaken >= 100) {
@@ -60,6 +76,20 @@ define([
 		}
 		else if(Global.LOG_MOVE_STEPS_ABOVE !== null && numStepsTaken > Global.LOG_MOVE_STEPS_ABOVE) {
 			console.log(numStepsTaken + (numStepsTaken === 1 ? " step" : " steps") + " taken in single frame");
+		}
+
+		for(var i = 0; i < this.entities.length; i++) {
+			this.entities[i].endOfMovement(t);
+		}
+
+		//keep track of frame rate
+		var time = now();
+		this._framesInLastSecond++;
+		if(time - this._startTimeOfLastFPSPoll >= 1000) {
+			this.fps = this._framesInLastSecond;
+			this._framesInLastSecond = 0;
+			this._startTimeOfLastFPSPoll = time;
+			console.log(this.fps);
 		}
 	};
 	Game.prototype._checkForEntityCollisions = function() {
@@ -72,7 +102,8 @@ define([
 		}));
 
 		while(maxHorizontalStability > 0 || maxVerticalStability > 0) {
-			var stabilityVar, maxStability, method;
+			//find highest stability entities
+			var stabilityVar, method, maxStability;
 			if(maxHorizontalStability >= maxVerticalStability) {
 				stabilityVar = 'horizontalStability';
 				method = 'checkForHorizontalCollision';
@@ -86,23 +117,36 @@ define([
 				maxVerticalStability--;
 			}
 
-			var entitiesToCheck = this.entities.filter(function(entity) {
-				return entity[stabilityVar] === maxStability;
-			});
-			for(i = 0; i < entitiesToCheck.length; i++) {
-				for(j = 0; j < this.entities.length; j++) {
-					if(!entitiesToCheck[i].sameAs(this.entities[j]) &&
-						this.entities[j][stabilityVar] <= maxStability) {
-						var result = entitiesToCheck[i][method](this.entities[j]);
-						if(result && result.prevStability < maxStability &&
-							result.currStability === maxStability) {
-							entitiesToCheck.push(this.entities[j]);
+			//check to see if any entities with that as their NATURAL stability are colliding any others
+			var entitiesWithMaxStability = [];
+			for(i = 0; i < this.entities.length; i++) {
+				if(this.entities[i][stabilityVar] === maxStability && this.entities[i].stability === maxStability) {
+					entitiesWithMaxStability.push(this.entities[i]);
+					for(j = i + 1; j < this.entities.length; j++) {
+						if(this.entities[j][stabilityVar] === maxStability && this.entities[j].stability === maxStability) {
+							//both entities are naturally the highest stability, check to see if they collide (and move them apart)
+							this.entities[i][method](this.entities[j]);
+							this.entities[j][method](this.entities[i]);
 						}
 					}
 				}
 			}
 
+			//now those entities are in their final place -- check to see if anything is colliding with them
+			for(i = 0; i < entitiesWithMaxStability.length; i++) {
+				for(j = 0; j < this.entities.length; j++) {
+					if(this.entities[j][stabilityVar] < maxStability) {
+						var result = this.entities[j][method](entitiesWithMaxStability[i]);
+						if(result && result.prevStability < maxStability && result.currStability === maxStability) {
+							entitiesWithMaxStability.push(this.entities[j]);
+						}
+					}
+				}
+			}
 		}
+	};
+	Game.prototype._checkForCollisionsWithEntity = function() {
+
 	};
 	Game.prototype.render = function() {
 		Draw.rect(0, 0, Global.CANVAS_WIDTH, Global.CANVAS_HEIGHT, { fill: '#000' });

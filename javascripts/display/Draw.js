@@ -8,15 +8,18 @@ define([
 	var CTX = Global.CANVAS.getContext("2d");
 
 	function applyDrawOptions(opts) {
-		if(opts && opts.fill) {
-			CTX.fillStyle = opts.fill;
-			return true;
-		}
-		else {
+		var result = { shouldFill: false, shouldStroke: false };
+		if(!opts || !opts.fill || opts.stroke) {
+			result.shouldStroke = true;
 			CTX.strokeStyle = opts && opts.stroke || '#fff';
 			CTX.lineWidth = opts && (opts.thickness || opts.thickness === 0) ? opts.thickness : 1;
-			return false;
 		}
+		if(opts && opts.fill) {
+			result.shouldFill = true;
+			CTX.fillStyle = opts.fill;
+			result.shouldFill = true;
+		}
+		return result;
 	}
 
 	return {
@@ -25,31 +28,45 @@ define([
 			if(arguments.length < 3) {
 				opts = y; height = x.height; width = x.width; y = x.top; x = x.left;
 			}
-			if(applyDrawOptions(opts)) {
+			var result = applyDrawOptions(opts);
+			if(result.shouldFill) {
 				CTX.fillRect(x - Camera.pos.x, y - Camera.pos.y, width, height);
 			}
-			else {
+			if(result.shouldStroke) {
 				CTX.strokeRect(x - Camera.pos.x, y - Camera.pos.y, width, height);
 			}
 		},
 		line: function(x1, y1, x2, y2, opts) {
 			//(Vector, Vector) or (Vector, Vector, opts)
 			if(arguments.length < 4) {
-				//TODO
+				opts = x2; y2 = y1.y; x2 = y1.x; y1 = x1.y; x1 = x1.x;
 			}
-			if(opts && opts.fill) {
-				applyDrawOptions({ stroke: opts.fill });
+			var result = applyDrawOptions(opts);
+			if(result.shouldStroke) {
+				CTX.beginPath();
+				CTX.moveTo(x1, y1);
+				CTX.lineTo(x2, y2);
+				CTX.stroke();
 			}
-			else {
-				applyDrawOptions(opts);
-			}
-			CTX.beginPath();
-			CTX.moveTo(x1, y1);
-			CTX.lineTo(x2, y2);
-			CTX.stroke();
 		},
 		poly: function(/* x1, y1, x2, y2, ..., */ opts) {
-			//TODO
+			CTX.beginPath();
+			CTX.moveTo(arguments[0], arguments[1]);
+			for(var i = 2; i < arguments.length - 1; i += 2) {
+				CTX.lineTo(arguments[i], arguments[i + 1]);
+			}
+			//this function assumes opts is given...
+			opts = arguments[arguments.length - 1];
+			if(opts && opts.close) {
+				CTX.closePath();
+			}
+			var result = applyDrawOptions(opts);
+			if(result.shouldFill) {
+				CTX.fill();
+			}
+			if(result.shouldStroke) {
+				CTX.stroke();
+			}
 		}
 	};
 });
